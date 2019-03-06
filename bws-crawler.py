@@ -1,6 +1,9 @@
 import requests
 import re
+import prometheus_client
 from bs4 import BeautifulSoup
+from prometheus_client import Gauge
+from flask import Response, Flask
 
 def currency_parser(block_text):
     """
@@ -11,7 +14,8 @@ def currency_parser(block_text):
     return value
 
 def get_bws_long_short():
-    TARGET_URL = "http://localhost:8083/D.A.R.T.%20Crypto%20Signals%20For%20BitMEX%20And%20Deribit.html"
+    # TARGET_URL = "http://localhost:8083/"
+    TARGET_URL = "https://blockchainwhispers.com/cryptosignals/"
     resp = requests.get(TARGET_URL)
     soup = BeautifulSoup(resp.text, 'html.parser')
 
@@ -47,7 +51,40 @@ def get_bws_long_short():
 
     return result
 
-def main():
+
+app = Flask("Blockchain Whispers Crawler")
+@app.route("/metrics")
+def output():
+    output = expanded_output()
+    return Response(output, mimetype="text/plain")
+
+def export_metrics():
+    output = ""
+    data = get_bws_long_short()
+    for exchange, positions in data.items():
+
+        gauge_desc_long = exchange + " Long position"
+        gauge_desc_short = exchange + " Short position"
+
+        long_key = exchange + "_long"
+        short_key = exchange + "_short"
+        long_value = str(positions['long'])
+        # print(long_value)
+        short_value = str(positions['short'])
+        # print(short_value)
+
+        g_long = Gauge(long_key, gauge_desc_long)
+        g_short = Gauge(short_key, gauge_desc_short)
+
+        g_long.set(long_value)
+        g_short.set(short_value)
+
+        output += str(prometheus_client.generate_latest(g_long))
+        output += str(prometheus_client.generate_latest(g_short))
+
+        return Response(output, mimetype='text/plain')
+
+def expanded_output():
     output = ""
     data = get_bws_long_short()
     for exchange, positions in data.items():
@@ -58,7 +95,14 @@ def main():
         output += long_key + " " + str(long_value) + "\n"
         output += short_key + " " + str(short_value) + "\n"
 
-    print(output)
+    return output
+
+def main():
+    print(expanded_output())
 
 if __name__ == '__main__':
-    main()
+    # main()
+    try:
+        app.run(host="0.0.0.0", port=8084)
+    except KeyboardInterrupt:
+        print("Quit!")
