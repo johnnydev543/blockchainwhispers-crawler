@@ -85,11 +85,12 @@ def export_metrics():
         return Response(output, mimetype='text/plain')
 
 def expanded_output():
+    placeholder = 'blockchainwhispers'
     output = ""
     data = get_bws_long_short()
     for exchange, positions in data.items():
-        long_key = exchange + "_long"
-        short_key = exchange + "_short"
+        long_key = placeholder + "_" + exchange + "_long"
+        short_key = placeholder + "_" + exchange + "_short"
         long_value = positions['long']
         short_value = positions['short']
         output += long_key + " " + str(long_value) + "\n"
