@@ -9,7 +9,16 @@ def currency_parser(block_text):
     """
     Find the curreny value in the string
     """
-    money = re.findall("(?:[\\$]{1}[,\\d]+.?\\d*)", block_text)[0]
+    if not block_text:
+        return False
+
+    money = re.findall("(?:[\\$]{1}[,\\d]+.?\\d*)", block_text)
+
+    if money:
+        money = money[0]
+    else:
+        return False
+
     value = int(re.sub(r'[^\d.]', '', money))
     return value
 
@@ -25,29 +34,42 @@ def get_bws_long_short():
 
     for title in titles:
 
-            block = title.find_parent(class_='col-md-3')
-            long_block = block.find(class_='value long')
-            short_block = block.find(class_='value short')
+        block = title.find_parent(class_='col-md-3')
+        long_block = block.find(class_='value long')
+        short_block = block.find(class_='value short')
 
-            # strip the block title
-            exchange_title = title.text.split(' ')[0]
+        # strip the block title
+        exchange_title = title.text.split(' ')[0]
 
+        if hasattr(long_block, 'text'):
             long_value = currency_parser(long_block.text)
+        else:
+            long_value = 0
+
+        if hasattr(short_block, 'text'):
             short_value = currency_parser(short_block.text)
+        else:
+            short_value = 0
 
-            if not exchange_title:
-                continue
+        if not exchange_title:
+            continue
 
-            exchange = {}
+        exchange = {}
 
-            if long_value > 0:
-                exchange['long'] = long_value
-                
-            if short_value > 0:
-                exchange['short'] = short_value
+        if long_value > 0:
+            exchange['long'] = long_value
+        else:
+            exchange['long'] = False
 
-            if exchange:
-                result[exchange_title] = exchange
+        if short_value > 0:
+            exchange['short'] = short_value
+        else:
+            exchange['short'] = False
+
+        if exchange:
+            result[exchange_title] = exchange
+        else:
+            result[exchange_title] = False
 
     return result
 
@@ -59,8 +81,8 @@ def output():
     return Response(output, mimetype="text/plain")
 
 def export_metrics():
-    output = ""
     data = get_bws_long_short()
+    output = ""
     for exchange, positions in data.items():
 
         gauge_desc_long = exchange + " Long position"
@@ -82,13 +104,18 @@ def export_metrics():
         output += str(prometheus_client.generate_latest(g_long))
         output += str(prometheus_client.generate_latest(g_short))
 
-        return Response(output, mimetype='text/plain')
+    return Response(output, mimetype='text/plain')
 
 def expanded_output():
     placeholder = 'blockchainwhispers'
     output = ""
     data = get_bws_long_short()
+    
+    print(data)
+
     for exchange, positions in data.items():
+        if False in positions.values():
+            return ""
         long_key = placeholder + "_" + exchange + "_long"
         short_key = placeholder + "_" + exchange + "_short"
         long_value = positions['long']
