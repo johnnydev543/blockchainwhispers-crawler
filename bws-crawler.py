@@ -4,6 +4,7 @@ import prometheus_client
 from bs4 import BeautifulSoup
 from prometheus_client import Gauge
 from flask import Response, Flask
+from flatten_json import flatten
 
 def currency_parser(block_text):
     """
@@ -17,116 +18,107 @@ def currency_parser(block_text):
     if money:
         money = money[0]
     else:
-        return False
+        return None
 
     value = int(re.sub(r'[^\d.]', '', money))
     return value
 
 def get_bws_long_short():
     # TARGET_URL = "http://localhost:8083/"
-    TARGET_URL = "https://blockchainwhispers.com/cryptosignals/"
+    # TARGET_URL = "http://localhost:8083/index-full.html"
+    TARGET_URL = "https://blockchainwhispers.com/bitmex-position-calculator/"
     resp = requests.get(TARGET_URL)
     soup = BeautifulSoup(resp.text, 'html.parser')
 
-    titles = soup.find_all('h3', 'h-desc')
+    currency_blocks = soup.find_all(class_='account-content')
 
     result = {}
 
-    for title in titles:
-
-        block = title.find_parent(class_='col-md-3')
-        long_block = block.find(class_='value long')
-        short_block = block.find(class_='value short')
+    for currency_block in currency_blocks:
 
         # strip the block title
-        exchange_title = title.text.split(' ')[0]
-
-        if hasattr(long_block, 'text'):
-            long_value = currency_parser(long_block.text)
+        if hasattr(currency_block.h2, 'string'):
+            currency_name = currency_block.h2.string.split(' ')[0]
         else:
-            long_value = 0
-
-        if hasattr(short_block, 'text'):
-            short_value = currency_parser(short_block.text)
-        else:
-            short_value = 0
-
-        if not exchange_title:
             continue
+        
+        exchanges_block = currency_block.find_all(class_='single-margin-platform')
+        
+        # print(exchanges_block)
+        currency = {}
+        for exchange_block in exchanges_block:
+            sub_block = exchange_block.find_parent('div')
+            # print(exchange_block)
+            
+            exchange_title = sub_block.find('h3').string.split(' ')[0]
+            # print(exchange_title)
+            
+            long_block = exchange_block.find(class_='value long')
+            short_block = exchange_block.find(class_='value short')
 
-        exchange = {}
+            if hasattr(long_block, 'text'):
+                long_value = currency_parser(long_block.text)
+            else:
+                long_value = 0
 
-        if long_value > 0:
-            exchange['long'] = long_value
+            if hasattr(short_block, 'text'):
+                short_value = currency_parser(short_block.text)
+            else:
+                short_value = 0
+
+            if not currency_name:
+                continue
+
+            
+            positions = {}
+
+            if long_value > 0:
+                positions['long'] = long_value
+            else:
+                positions['long'] = None
+
+            if short_value > 0:
+                positions['short'] = short_value
+            else:
+                positions['short'] = None
+
+            if positions:
+                currency[exchange_title] = positions
+            else:
+                currency[exchange_title] = None
+        
+
+        if currency:
+            result[currency_name] = currency
         else:
-            exchange['long'] = False
+            result[currency_name] = None
 
-        if short_value > 0:
-            exchange['short'] = short_value
-        else:
-            exchange['short'] = False
-
-        if exchange:
-            result[exchange_title] = exchange
-        else:
-            result[exchange_title] = False
-
+    # print(result)
     return result
 
-
-app = Flask("Blockchain Whispers Crawler")
+# Use the flask to ouput the data to a web server page,
+# to be used in Prometheus
+app = Flask("Blockchain Whispers Long Short Crawler")
 @app.route("/metrics")
 def output():
-    output = expanded_output()
+    output = flatten_output()
     return Response(output, mimetype="text/plain")
 
-def export_metrics():
-    data = get_bws_long_short()
-    output = ""
-    for exchange, positions in data.items():
+def flatten_output():
 
-        gauge_desc_long = exchange + " Long position"
-        gauge_desc_short = exchange + " Short position"
-
-        long_key = exchange + "_long"
-        short_key = exchange + "_short"
-        long_value = str(positions['long'])
-        # print(long_value)
-        short_value = str(positions['short'])
-        # print(short_value)
-
-        g_long = Gauge(long_key, gauge_desc_long)
-        g_short = Gauge(short_key, gauge_desc_short)
-
-        g_long.set(long_value)
-        g_short.set(short_value)
-
-        output += str(prometheus_client.generate_latest(g_long))
-        output += str(prometheus_client.generate_latest(g_short))
-
-    return Response(output, mimetype='text/plain')
-
-def expanded_output():
-    placeholder = 'blockchainwhispers'
     output = ""
     data = get_bws_long_short()
     
-    print(data)
+    # flatten json, the format should be the key value in string
+    flatten_data = flatten(data)
 
-    for exchange, positions in data.items():
-        if False in positions.values():
-            return ""
-        long_key = placeholder + "_" + exchange + "_long"
-        short_key = placeholder + "_" + exchange + "_short"
-        long_value = positions['long']
-        short_value = positions['short']
-        output += long_key + " " + str(long_value) + "\n"
-        output += short_key + " " + str(short_value) + "\n"
+    for key, value in flatten_data.items():
+        output += key + " " + str(value) + "\n"
 
     return output
 
 def main():
-    print(expanded_output())
+    print(flatten_output())
 
 if __name__ == '__main__':
     # main()
