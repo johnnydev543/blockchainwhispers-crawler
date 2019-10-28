@@ -1,8 +1,6 @@
 import requests
 import re
-import prometheus_client
 from bs4 import BeautifulSoup
-from prometheus_client import Gauge
 from flask import Response, Flask
 from flatten_json import flatten
 
@@ -24,7 +22,7 @@ def currency_parser(block_text):
     return value
 
 def get_bws_long_short():
-    # TARGET_URL = "http://localhost:8083/"
+    # TARGET_URL = "http://localhost:5000/"
     # TARGET_URL = "http://localhost:8083/index-full.html"
     TARGET_URL = "https://blockchainwhispers.com/bitmex-position-calculator/"
     resp = requests.get(TARGET_URL)
@@ -48,11 +46,11 @@ def get_bws_long_short():
         currency = {}
         for exchange_block in exchanges_block:
             sub_block = exchange_block.find_parent('div')
-            # print(exchange_block)
-            
-            exchange_title = sub_block.find('h3').string.split(' ')[0]
+            # print(sub_block)
+
+            exchange_title = sub_block.find('h3').get_text().split(' ')[0]
             # print(exchange_title)
-            
+
             long_block = exchange_block.find(class_='value long')
             short_block = exchange_block.find(class_='value short')
 
