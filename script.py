@@ -73,24 +73,14 @@ def get_bws_long_short():
 
             positions = {}
 
-            if long_value > 0:
-                positions['long'] = long_value
-            else:
-                positions['long'] = None
-
-            if short_value > 0:
-                positions['short'] = short_value
-            else:
-                positions['short'] = None
+            positions['long']  = long_value  if long_value  > 0 else None
+            positions['short'] = short_value if short_value > 0 else None
             
             if exchange_title == 'Total':
                 diff  = long_value - short_value
                 positions['diff'] = diff
 
-            if positions:
-                currency[exchange_title] = positions
-            else:
-                currency[exchange_title] = None
+            currency[exchange_title] = positions if positions else None
 
         if currency:
             result[currency_name] = currency
@@ -156,6 +146,11 @@ class BWSPositionsCollector(object):
 
         for coin, exchanges in data.items():
             for exchange, position in exchanges.items():
+
+                # skip if has no value
+                if 'long' in position and position['long'] == None:
+                    continue
+
                 metrics[coin].add_metric(
                     [exchange, 'long'], position.get('long', None))
                 metrics[coin].add_metric(
