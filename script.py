@@ -31,7 +31,7 @@ def get_bws_long_short():
     resp = requests.get(TARGET_URL)
     soup = BeautifulSoup(resp.text, 'html.parser')
 
-    currency_blocks = soup.find_all(class_='account-content')
+    currency_blocks = soup.find_all(class_='bcw-calculator-longs-shorts')
 
     result = {}
 
@@ -43,8 +43,7 @@ def get_bws_long_short():
         else:
             continue
 
-        exchanges_block = currency_block.find_all(
-            class_='single-margin-platform')
+        exchanges_block = currency_block.find_all(class_='bcw-calculator-card')
 
         # print(exchanges_block)
         currency = {}
@@ -52,11 +51,10 @@ def get_bws_long_short():
             sub_block = exchange_block.find_parent('div')
             # print(sub_block)
 
-            exchange_title = sub_block.find('h3').get_text().split(' ')[0]
-            # print(exchange_title)
+            exchange_title = sub_block.find(class_='bcw-calculator-card-heading').get_text().split(' ')[0].lstrip()
 
-            long_block = exchange_block.find(class_='value long')
-            short_block = exchange_block.find(class_='value short')
+            long_block = exchange_block.find(class_='btc-calculator-card-longs').find(class_='card-longs-value')           
+            short_block = exchange_block.find(class_='btc-calculator-card-shorts').find(class_='card-shorts-value')
 
             if hasattr(long_block, 'text'):
                 long_value = currency_parser(long_block.text)
@@ -94,7 +92,7 @@ class BWSPositionsCollector(object):
     def collect(self):
 
         data = get_bws_long_short()
-        print(data)
+        # print(data)
         """
         DATA STRUCTURE:
 
